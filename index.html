@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-  <title>OCR/MHD-Testprototyp v0.1</title>
+  <title>OCR/MHD-Testprototyp v0.2</title>
   <style>
     :root {
       font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
@@ -119,7 +119,7 @@
 <body>
 <main>
   <h1>OCR/MHD-Testprototyp</h1>
-  <div class="version">Version 0.1 · technischer Wegwerf-Test</div>
+  <div class="version">Version 0.2 · gezielter MHD-Ausschnitt-Test</div>
 
   <section class="card">
     <div class="test-id" id="testId">Test T001</div>
@@ -130,8 +130,9 @@
     <input id="cameraInput" type="file" accept="image/*" capture="environment">
 
     <img id="preview" class="preview" alt="Vorschau des Testfotos" hidden>
+    <div class="small" id="cropHint" hidden>Version 0.2 untersucht automatisch fünf Bereiche des Fotos (Gesamtbild, Mitte, oben, unten und mittleres Band) und bewertet datumsähnliche OCR-Treffer.</div>
 
-    <button id="analyzeBtn" disabled>OCR auswerten</button>
+    <button id="analyzeBtn" disabled>MHD gezielt suchen</button>
     <div id="progress" class="progress"></div>
   </section>
 
@@ -231,7 +232,7 @@
     });
   }
 
-  async function preprocess(dataUrl, mode) {
+  async function preprocess(dataUrl, mode, region = "full") {
     const img = await loadImage(dataUrl);
     const maxSide = 1800;
     let width = img.naturalWidth;
@@ -240,11 +241,26 @@
     width = Math.round(width * scale);
     height = Math.round(height * scale);
 
+    const regions = {
+      full: [0, 0, 1, 1],
+      center: [0.10, 0.20, 0.80, 0.60],
+      top: [0, 0, 1, 0.45],
+      bottom: [0, 0.55, 1, 0.45],
+      band: [0, 0.25, 1, 0.50]
+    };
+    const r = regions[region] || regions.full;
+    const sx = Math.round(img.naturalWidth * r[0]);
+    const sy = Math.round(img.naturalHeight * r[1]);
+    const sw = Math.round(img.naturalWidth * r[2]);
+    const sh = Math.round(img.naturalHeight * r[3]);
+    let outW = Math.round(width * r[2]);
+    let outH = Math.round(height * r[3]);
     const canvas = document.createElement("canvas");
-    canvas.width = width;
-    canvas.height = height;
+    canvas.width = outW;
+    canvas.height = outH;
     const ctx = canvas.getContext("2d");
-    ctx.drawImage(img, 0, 0, width, height);
+    ctx.drawImage(img, sx, sy, sw, sh, 0, 0, outW, outH);
+    width = outW; height = outH;
 
     if (mode !== "original") {
       const imageData = ctx.getImageData(0, 0, width, height);
@@ -270,20 +286,27 @@
     return canvas.toDataURL("image/jpeg", 0.92);
   }
 
-  function extractDateCandidates(text) {
-    const cleaned = text.replace(/\s+/g, " ");
-    const patterns = [
-      /\b(?:0?[1-9]|[12]\d|3[01])[.\-\/](?:0?[1-9]|1[0-2])[.\-\/](?:20)?\d{2}\b/g,
-      /\b(?:0?[1-9]|1[0-2])[.\-\/](?:20)?\d{2}\b/g,
-      /\b(?:20)?\d{2}[.\-\/](?:0?[1-9]|1[0-2])[.\-\/](?:0?[1-9]|[12]\d|3[01])\b/g,
-      /\b(?:JAN|FEB|MÄR|MAR|APR|MAI|JUN|JUL|AUG|SEP|OKT|OCT|NOV|DEZ|DEC)[A-ZÄÖÜ]*\s*(?:20)?\d{2}\b/gi
-    ];
+  function normalizeDateLike(s) {
+    return s.toUpperCase()
+      .replace(/[OQ]/g, "0")
+      .replace(/[IL|]/g, "1")
+      .replace(/Z/g, "2")
+      .replace(/S/g, "5")
+      .replace(/B/g, "8")
+      .replace(/,/g, ".")
+      .replace(/\s+/g, " ");
+  }
 
+  function extractDateCandidates(text) {
+    const raw = text.replace(/\s+/g, " ");
+    const normalized = normalizeDateLike(raw);
+    const patterns = [
+      /\b(?:0?[1-9]|[12]\d|3[01])[.\-\/ ](?:0?[1-9]|1[0-2])[.\-\/ ](?:20)?\d{2}\b/g,
+      /\b(?:0?[1-9]|1[0-2])[.\-\/ ](?:20)?\d{2}\b/g,
+      /\b(?:20)?\d{2}[.\-\/ ](?:0?[1-9]|1[0-2])[.\-\/ ](?:0?[1-9]|[12]\d|3[01])\b/g
+    ];
     const found = [];
-    for (const p of patterns) {
-      const matches = cleaned.match(p) || [];
-      found.push(...matches);
-    }
+    for (const p of patterns) found.push(...(normalized.match(p) || []));
     return [...new Set(found.map(v => v.trim()))];
   }
 
@@ -300,9 +323,9 @@
     return state.worker;
   }
 
-  async function runVariant(worker, name, mode, dataUrl) {
+  async function runVariant(worker, name, mode, dataUrl, region = "full") {
     progress.textContent = `${name}: Bild wird vorbereitet …`;
-    const processed = await preprocess(dataUrl, mode);
+    const processed = await preprocess(dataUrl, mode, region);
 
     const start = performance.now();
     const result = await worker.recognize(processed);
@@ -313,6 +336,7 @@
     return {
       name,
       mode,
+      region,
       text,
       candidates,
       confidence: Number.isFinite(result.data.confidence) ? Math.round(result.data.confidence) : null,
@@ -370,6 +394,7 @@
     state.currentDataUrl = await fileToDataURL(file);
     preview.src = state.currentDataUrl;
     preview.hidden = false;
+    document.getElementById("cropHint").hidden = false;
     analyzeBtn.disabled = false;
     resultsCard.hidden = true;
     progress.textContent = "Foto bereit.";
@@ -385,9 +410,17 @@
       const worker = await ensureWorker();
 
       const variants = [];
-      variants.push(await runVariant(worker, "A – Original", "original", state.currentDataUrl));
-      variants.push(await runVariant(worker, "B – Graustufen + Kontrast", "contrast", state.currentDataUrl));
-      variants.push(await runVariant(worker, "C – Schwarz-Weiß-Schwelle", "threshold", state.currentDataUrl));
+      const searches = [
+        ["Gesamtbild – Kontrast", "contrast", "full"],
+        ["Mitte – Kontrast", "contrast", "center"],
+        ["Oberer Bereich – Kontrast", "contrast", "top"],
+        ["Unterer Bereich – Kontrast", "contrast", "bottom"],
+        ["Mittleres Band – Kontrast", "contrast", "band"],
+        ["Mitte – Schwarz-Weiß", "threshold", "center"]
+      ];
+      for (const [name, mode, region] of searches) {
+        variants.push(await runVariant(worker, name, mode, state.currentDataUrl, region));
+      }
 
       const test = {
         id,
@@ -478,7 +511,7 @@
         photos.file(`${t.id}_original.${ext}`, origBlob);
 
         for (const v of t.variants) {
-          processed.file(`${t.id}_${v.mode}.jpg`, dataURLToBlob(v.processedDataUrl));
+          processed.file(`${t.id}_${v.region || "full"}_${v.mode}.jpg`, dataURLToBlob(v.processedDataUrl));
         }
       }
 
@@ -493,6 +526,7 @@
         variants: t.variants.map(v => ({
           name: v.name,
           mode: v.mode,
+          region: v.region || "full",
           text: v.text,
           candidates: v.candidates,
           confidence: v.confidence,
@@ -500,17 +534,17 @@
         }))
       }));
       zip.file("ocr_ergebnisse.json", JSON.stringify({
-        prototypeVersion: "0.1",
+        prototypeVersion: "0.2",
         exportedAt: new Date().toISOString(),
         tests: jsonSafe
       }, null, 2));
 
       zip.file("README.txt",
-`OCR/MHD-Testprototyp Version 0.1
+`OCR/MHD-Testprototyp Version 0.2
 
 Inhalt:
 - fotos/: Originalaufnahmen
-- vergleichsbilder/: OCR-Bildvarianten
+- vergleichsbilder/: automatisch untersuchte Bildbereiche und OCR-Varianten
 - ocr_ergebnisse.csv: kompakte Auswertung
 - ocr_ergebnisse.json: vollständige strukturierte Ergebnisse
 
