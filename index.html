@@ -119,14 +119,21 @@
 <body>
 <main>
   <h1>OCR/MHD-Testprototyp</h1>
-  <div class="version">Version 0.2 · gezielter MHD-Ausschnitt-Test</div>
+  <div class="version">Version 0.2 · Referenztest mit gezielter MHD-Suche</div>
 
   <section class="card">
     <div class="test-id" id="testId">Test T001</div>
     <div class="instruction" id="instruction"></div>
     <div class="small" id="counter"></div>
 
-    <label class="file-label" for="cameraInput">Foto aufnehmen / auswählen</label>
+    <label class="file-label" for="zipInput">Testpaket aus Version 0.1 laden</label>
+    <input id="zipInput" type="file" accept=".zip,application/zip">
+    <button id="batchBtn" disabled>Referenztest mit allen Fotos starten</button>
+    <div class="small" id="zipInfo">Für den Vergleich bitte das ZIP-Testpaket aus Version 0.1 auswählen.</div>
+
+    <hr style="margin:18px 0;border:0;border-top:1px solid #ddd">
+
+    <label class="file-label" for="cameraInput">Alternativ: einzelnes Foto aufnehmen / auswählen</label>
     <input id="cameraInput" type="file" accept="image/*" capture="environment">
 
     <img id="preview" class="preview" alt="Vorschau des Testfotos" hidden>
@@ -177,13 +184,17 @@
     currentFile: null,
     currentDataUrl: null,
     tests: [],
-    worker: null
+    worker: null,
+    referencePhotos: []
   };
 
   const el = id => document.getElementById(id);
   const testIdEl = el("testId");
   const instructionEl = el("instruction");
   const counterEl = el("counter");
+  const zipInput = el("zipInput");
+  const batchBtn = el("batchBtn");
+  const zipInfo = el("zipInfo");
   const cameraInput = el("cameraInput");
   const preview = el("preview");
   const analyzeBtn = el("analyzeBtn");
@@ -386,6 +397,99 @@
     exportBtn.disabled = false;
     counterEl.textContent = `${state.tests.length} Test(s) abgeschlossen. Ziel für den ersten Durchlauf: 8–12.`;
   }
+
+
+  zipInput.addEventListener("change", async () => {
+    const file = zipInput.files && zipInput.files[0];
+    if (!file) return;
+    batchBtn.disabled = true;
+    zipInfo.textContent = "Testpaket wird gelesen …";
+    try {
+      const zip = await JSZip.loadAsync(file);
+      const entries = Object.values(zip.files)
+        .filter(e => !e.dir && /^fotos\/T\d+_original\.(jpg|jpeg|png)$/i.test(e.name))
+        .sort((a,b) => a.name.localeCompare(b.name, undefined, {numeric:true}));
+
+      if (!entries.length) throw new Error("Im ZIP wurden keine Referenzfotos im Ordner „fotos“ gefunden.");
+
+      state.referencePhotos = [];
+      for (const entry of entries) {
+        const blob = await entry.async("blob");
+        const dataUrl = await new Promise((resolve, reject) => {
+          const r = new FileReader();
+          r.onload = () => resolve(r.result);
+          r.onerror = reject;
+          r.readAsDataURL(blob);
+        });
+        const m = entry.name.match(/(T\d+)_original/i);
+        state.referencePhotos.push({
+          id: m ? m[1].toUpperCase() : "T" + String(state.referencePhotos.length + 1).padStart(3,"0"),
+          name: entry.name.split("/").pop(),
+          type: blob.type || "image/jpeg",
+          dataUrl
+        });
+      }
+      zipInfo.textContent = `${state.referencePhotos.length} Referenzfotos gefunden.`;
+      batchBtn.disabled = false;
+    } catch (err) {
+      console.error(err);
+      zipInfo.textContent = "ZIP konnte nicht gelesen werden: " + (err.message || err);
+    }
+  });
+
+  batchBtn.addEventListener("click", async () => {
+    if (!state.referencePhotos.length) return;
+    batchBtn.disabled = true;
+    zipInput.disabled = true;
+    cameraInput.disabled = true;
+    analyzeBtn.disabled = true;
+    state.tests = [];
+    state.index = 0;
+    resultsCard.hidden = true;
+
+    try {
+      const worker = await ensureWorker();
+      const searches = [
+        ["Gesamtbild – Kontrast", "contrast", "full"],
+        ["Mitte – Kontrast", "contrast", "center"],
+        ["Oberer Bereich – Kontrast", "contrast", "top"],
+        ["Unterer Bereich – Kontrast", "contrast", "bottom"],
+        ["Mittleres Band – Kontrast", "contrast", "band"],
+        ["Mitte – Schwarz-Weiß", "threshold", "center"]
+      ];
+
+      for (let i = 0; i < state.referencePhotos.length; i++) {
+        const photo = state.referencePhotos[i];
+        progress.textContent = `${photo.id}: Foto ${i+1} von ${state.referencePhotos.length} …`;
+        const variants = [];
+        for (const [name, mode, region] of searches) {
+          progress.textContent = `${photo.id} · ${name} · Foto ${i+1}/${state.referencePhotos.length}`;
+          variants.push(await runVariant(worker, name, mode, photo.dataUrl, region));
+        }
+        state.tests.push({
+          id: photo.id,
+          instruction: "Referenzfoto aus Testlauf 0.1",
+          originalName: photo.name,
+          originalType: photo.type,
+          timestamp: new Date().toISOString(),
+          originalDataUrl: photo.dataUrl,
+          variants
+        });
+        updateSummary();
+      }
+
+      renderResult(state.tests[state.tests.length - 1]);
+      progress.textContent = `Referenztest abgeschlossen: ${state.tests.length} Fotos ausgewertet. Jetzt Testpaket exportieren.`;
+      window.scrollTo({top: document.body.scrollHeight, behavior:"smooth"});
+    } catch (err) {
+      console.error(err);
+      progress.textContent = "Fehler beim Referenztest: " + (err.message || err);
+    } finally {
+      batchBtn.disabled = false;
+      zipInput.disabled = false;
+      cameraInput.disabled = false;
+    }
+  });
 
   cameraInput.addEventListener("change", async () => {
     const file = cameraInput.files && cameraInput.files[0];
