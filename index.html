@@ -1,0 +1,570 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <title>OCR/MHD-Testprototyp v0.1</title>
+  <style>
+    :root {
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+    }
+    body {
+      margin: 0;
+      background: #f5f5f5;
+      color: #111;
+    }
+    main {
+      max-width: 760px;
+      margin: 0 auto;
+      padding: 18px;
+    }
+    h1 {
+      font-size: 1.65rem;
+      margin: 0 0 6px;
+    }
+    .version {
+      font-size: 0.95rem;
+      margin-bottom: 18px;
+    }
+    .card {
+      background: white;
+      border-radius: 14px;
+      padding: 16px;
+      margin: 14px 0;
+      box-shadow: 0 1px 5px rgba(0,0,0,.12);
+    }
+    .test-id {
+      font-size: 1.5rem;
+      font-weight: 700;
+    }
+    .instruction {
+      font-size: 1.25rem;
+      line-height: 1.35;
+      margin-top: 8px;
+    }
+    button, .file-label {
+      width: 100%;
+      box-sizing: border-box;
+      display: block;
+      border: 0;
+      border-radius: 12px;
+      padding: 15px 16px;
+      font-size: 1.1rem;
+      font-weight: 650;
+      margin: 10px 0;
+      text-align: center;
+      background: #111;
+      color: white;
+      cursor: pointer;
+    }
+    button.secondary {
+      background: #ddd;
+      color: #111;
+    }
+    button:disabled {
+      opacity: .45;
+      cursor: default;
+    }
+    input[type=file] {
+      display: none;
+    }
+    img.preview {
+      width: 100%;
+      max-height: 320px;
+      object-fit: contain;
+      border-radius: 10px;
+      background: #eee;
+      margin-top: 10px;
+    }
+    .progress {
+      font-weight: 600;
+      margin: 10px 0;
+    }
+    .variant {
+      border-top: 1px solid #ddd;
+      padding-top: 12px;
+      margin-top: 12px;
+    }
+    .variant:first-child {
+      border-top: 0;
+      padding-top: 0;
+      margin-top: 0;
+    }
+    .variant h3 {
+      margin: 0 0 6px;
+    }
+    .candidate {
+      font-size: 1.15rem;
+      font-weight: 700;
+    }
+    pre {
+      white-space: pre-wrap;
+      word-break: break-word;
+      background: #f1f1f1;
+      border-radius: 8px;
+      padding: 10px;
+      font-size: .92rem;
+      max-height: 180px;
+      overflow: auto;
+    }
+    .small {
+      font-size: .9rem;
+      color: #444;
+    }
+    .status-ok {
+      font-weight: 700;
+    }
+  </style>
+</head>
+<body>
+<main>
+  <h1>OCR/MHD-Testprototyp</h1>
+  <div class="version">Version 0.1 · technischer Wegwerf-Test</div>
+
+  <section class="card">
+    <div class="test-id" id="testId">Test T001</div>
+    <div class="instruction" id="instruction"></div>
+    <div class="small" id="counter"></div>
+
+    <label class="file-label" for="cameraInput">Foto aufnehmen / auswählen</label>
+    <input id="cameraInput" type="file" accept="image/*" capture="environment">
+
+    <img id="preview" class="preview" alt="Vorschau des Testfotos" hidden>
+
+    <button id="analyzeBtn" disabled>OCR auswerten</button>
+    <div id="progress" class="progress"></div>
+  </section>
+
+  <section class="card" id="resultsCard" hidden>
+    <h2>Ergebnis</h2>
+    <div id="results"></div>
+    <button id="nextBtn">Nächstes Testfoto</button>
+  </section>
+
+  <section class="card">
+    <h2>Gesamttest</h2>
+    <div id="summary">Noch keine Tests abgeschlossen.</div>
+    <button id="exportBtn" class="secondary" disabled>Testpaket exportieren (ZIP)</button>
+    <button id="resetBtn" class="secondary">Test neu beginnen</button>
+    <div class="small">
+      Das ZIP enthält die Originalfotos, die aufbereiteten Vergleichsbilder,
+      eine CSV-Auswertung und eine JSON-Datei mit allen Rohdaten.
+    </div>
+  </section>
+</main>
+
+<script src="https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/tesseract.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/jszip@3.10.1/dist/jszip.min.js"></script>
+
+<script>
+(() => {
+  const instructions = [
+    "MHD möglichst normal und gut sichtbar fotografieren.",
+    "MHD bei schwachem Kontrast fotografieren.",
+    "MHD auf einer gewölbten oder unebenen Verpackung fotografieren.",
+    "MHD etwas weiter entfernt fotografieren, sodass mehr Verpackung sichtbar ist.",
+    "MHD möglichst nah fotografieren.",
+    "MHD bei weniger günstiger Beleuchtung fotografieren.",
+    "MHD leicht schräg fotografieren.",
+    "Ein schwieriges MHD wählen, z. B. geprägt, punktiert oder sehr klein.",
+    "Ein weiteres typisches MHD aus Kühlschrank oder Vorrat fotografieren.",
+    "Ein weiteres schwieriges MHD fotografieren."
+  ];
+
+  const state = {
+    index: 0,
+    currentFile: null,
+    currentDataUrl: null,
+    tests: [],
+    worker: null
+  };
+
+  const el = id => document.getElementById(id);
+  const testIdEl = el("testId");
+  const instructionEl = el("instruction");
+  const counterEl = el("counter");
+  const cameraInput = el("cameraInput");
+  const preview = el("preview");
+  const analyzeBtn = el("analyzeBtn");
+  const progress = el("progress");
+  const resultsCard = el("resultsCard");
+  const results = el("results");
+  const nextBtn = el("nextBtn");
+  const summary = el("summary");
+  const exportBtn = el("exportBtn");
+  const resetBtn = el("resetBtn");
+
+  function currentId() {
+    return "T" + String(state.index + 1).padStart(3, "0");
+  }
+
+  function updateHeader() {
+    testIdEl.textContent = "Test " + currentId();
+    instructionEl.textContent = instructions[state.index % instructions.length];
+    counterEl.textContent = `${state.tests.length} Test(s) abgeschlossen. Ziel für den ersten Durchlauf: 8–12.`;
+  }
+
+  function fileToDataURL(file) {
+    return new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onload = () => resolve(reader.result);
+      reader.onerror = reject;
+      reader.readAsDataURL(file);
+    });
+  }
+
+  function dataURLToBlob(dataUrl) {
+    const [header, data] = dataUrl.split(",");
+    const mime = header.match(/data:(.*?);base64/)[1];
+    const binary = atob(data);
+    const bytes = new Uint8Array(binary.length);
+    for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i);
+    return new Blob([bytes], {type: mime});
+  }
+
+  function loadImage(dataUrl) {
+    return new Promise((resolve, reject) => {
+      const img = new Image();
+      img.onload = () => resolve(img);
+      img.onerror = reject;
+      img.src = dataUrl;
+    });
+  }
+
+  async function preprocess(dataUrl, mode) {
+    const img = await loadImage(dataUrl);
+    const maxSide = 1800;
+    let width = img.naturalWidth;
+    let height = img.naturalHeight;
+    const scale = Math.min(1, maxSide / Math.max(width, height));
+    width = Math.round(width * scale);
+    height = Math.round(height * scale);
+
+    const canvas = document.createElement("canvas");
+    canvas.width = width;
+    canvas.height = height;
+    const ctx = canvas.getContext("2d");
+    ctx.drawImage(img, 0, 0, width, height);
+
+    if (mode !== "original") {
+      const imageData = ctx.getImageData(0, 0, width, height);
+      const d = imageData.data;
+
+      for (let i = 0; i < d.length; i += 4) {
+        const gray = Math.round(0.299 * d[i] + 0.587 * d[i+1] + 0.114 * d[i+2]);
+
+        if (mode === "contrast") {
+          const contrast = 1.65;
+          const v = Math.max(0, Math.min(255, (gray - 128) * contrast + 128));
+          d[i] = d[i+1] = d[i+2] = v;
+        }
+
+        if (mode === "threshold") {
+          const v = gray >= 145 ? 255 : 0;
+          d[i] = d[i+1] = d[i+2] = v;
+        }
+      }
+      ctx.putImageData(imageData, 0, 0);
+    }
+
+    return canvas.toDataURL("image/jpeg", 0.92);
+  }
+
+  function extractDateCandidates(text) {
+    const cleaned = text.replace(/\s+/g, " ");
+    const patterns = [
+      /\b(?:0?[1-9]|[12]\d|3[01])[.\-\/](?:0?[1-9]|1[0-2])[.\-\/](?:20)?\d{2}\b/g,
+      /\b(?:0?[1-9]|1[0-2])[.\-\/](?:20)?\d{2}\b/g,
+      /\b(?:20)?\d{2}[.\-\/](?:0?[1-9]|1[0-2])[.\-\/](?:0?[1-9]|[12]\d|3[01])\b/g,
+      /\b(?:JAN|FEB|MÄR|MAR|APR|MAI|JUN|JUL|AUG|SEP|OKT|OCT|NOV|DEZ|DEC)[A-ZÄÖÜ]*\s*(?:20)?\d{2}\b/gi
+    ];
+
+    const found = [];
+    for (const p of patterns) {
+      const matches = cleaned.match(p) || [];
+      found.push(...matches);
+    }
+    return [...new Set(found.map(v => v.trim()))];
+  }
+
+  async function ensureWorker() {
+    if (state.worker) return state.worker;
+    progress.textContent = "OCR-Modul wird geladen …";
+    state.worker = await Tesseract.createWorker("deu", 1, {
+      logger: m => {
+        if (m.status === "recognizing text") {
+          progress.textContent = `OCR läuft … ${Math.round((m.progress || 0) * 100)} %`;
+        }
+      }
+    });
+    return state.worker;
+  }
+
+  async function runVariant(worker, name, mode, dataUrl) {
+    progress.textContent = `${name}: Bild wird vorbereitet …`;
+    const processed = await preprocess(dataUrl, mode);
+
+    const start = performance.now();
+    const result = await worker.recognize(processed);
+    const ms = Math.round(performance.now() - start);
+    const text = (result.data.text || "").trim();
+    const candidates = extractDateCandidates(text);
+
+    return {
+      name,
+      mode,
+      text,
+      candidates,
+      confidence: Number.isFinite(result.data.confidence) ? Math.round(result.data.confidence) : null,
+      runtimeMs: ms,
+      processedDataUrl: processed
+    };
+  }
+
+  function escapeHtml(s) {
+    return String(s)
+      .replaceAll("&", "&amp;")
+      .replaceAll("<", "&lt;")
+      .replaceAll(">", "&gt;")
+      .replaceAll('"', "&quot;");
+  }
+
+  function renderResult(test) {
+    results.innerHTML = test.variants.map(v => `
+      <div class="variant">
+        <h3>${escapeHtml(v.name)}</h3>
+        <div class="candidate">Datums-Kandidaten: ${v.candidates.length ? escapeHtml(v.candidates.join(", ")) : "keine"}</div>
+        <div class="small">OCR-Konfidenz: ${v.confidence ?? "–"} % · Laufzeit: ${(v.runtimeMs / 1000).toFixed(1)} s</div>
+        <pre>${escapeHtml(v.text || "(kein Text erkannt)")}</pre>
+      </div>
+    `).join("");
+    resultsCard.hidden = false;
+  }
+
+  function updateSummary() {
+    if (!state.tests.length) {
+      summary.textContent = "Noch keine Tests abgeschlossen.";
+      exportBtn.disabled = true;
+      return;
+    }
+
+    let candidateHits = 0;
+    let variantsTotal = 0;
+    for (const t of state.tests) {
+      for (const v of t.variants) {
+        variantsTotal++;
+        if (v.candidates.length) candidateHits++;
+      }
+    }
+
+    summary.innerHTML = `<span class="status-ok">${state.tests.length} Testfoto(s) abgeschlossen.</span>
+      In ${candidateHits} von ${variantsTotal} OCR-Durchläufen wurde mindestens ein Datums-Kandidat gefunden.`;
+    exportBtn.disabled = false;
+    counterEl.textContent = `${state.tests.length} Test(s) abgeschlossen. Ziel für den ersten Durchlauf: 8–12.`;
+  }
+
+  cameraInput.addEventListener("change", async () => {
+    const file = cameraInput.files && cameraInput.files[0];
+    if (!file) return;
+    state.currentFile = file;
+    state.currentDataUrl = await fileToDataURL(file);
+    preview.src = state.currentDataUrl;
+    preview.hidden = false;
+    analyzeBtn.disabled = false;
+    resultsCard.hidden = true;
+    progress.textContent = "Foto bereit.";
+  });
+
+  analyzeBtn.addEventListener("click", async () => {
+    if (!state.currentDataUrl) return;
+    analyzeBtn.disabled = true;
+    cameraInput.disabled = true;
+
+    try {
+      const id = currentId();
+      const worker = await ensureWorker();
+
+      const variants = [];
+      variants.push(await runVariant(worker, "A – Original", "original", state.currentDataUrl));
+      variants.push(await runVariant(worker, "B – Graustufen + Kontrast", "contrast", state.currentDataUrl));
+      variants.push(await runVariant(worker, "C – Schwarz-Weiß-Schwelle", "threshold", state.currentDataUrl));
+
+      const test = {
+        id,
+        instruction: instructions[state.index % instructions.length],
+        originalName: state.currentFile ? state.currentFile.name : "",
+        originalType: state.currentFile ? state.currentFile.type : "image/jpeg",
+        timestamp: new Date().toISOString(),
+        originalDataUrl: state.currentDataUrl,
+        variants
+      };
+
+      state.tests.push(test);
+      renderResult(test);
+      updateSummary();
+      progress.textContent = "Auswertung abgeschlossen.";
+    } catch (err) {
+      console.error(err);
+      progress.textContent = "Fehler bei der OCR: " + (err.message || err);
+      analyzeBtn.disabled = false;
+    } finally {
+      cameraInput.disabled = false;
+    }
+  });
+
+  nextBtn.addEventListener("click", () => {
+    state.index++;
+    state.currentFile = null;
+    state.currentDataUrl = null;
+    cameraInput.value = "";
+    preview.src = "";
+    preview.hidden = true;
+    analyzeBtn.disabled = true;
+    resultsCard.hidden = true;
+    progress.textContent = "";
+    updateHeader();
+    window.scrollTo({top: 0, behavior: "smooth"});
+  });
+
+  function csvEscape(value) {
+    const s = Array.isArray(value) ? value.join(" | ") : String(value ?? "");
+    return '"' + s.replaceAll('"', '""') + '"';
+  }
+
+  function buildCSV() {
+    const rows = [[
+      "Test-ID",
+      "Fotoanweisung",
+      "Originaldatei",
+      "Zeitpunkt",
+      "Variante",
+      "Datums-Kandidaten",
+      "OCR-Konfidenz",
+      "Laufzeit_ms",
+      "OCR-Gesamttext"
+    ]];
+
+    for (const t of state.tests) {
+      for (const v of t.variants) {
+        rows.push([
+          t.id,
+          t.instruction,
+          t.originalName,
+          t.timestamp,
+          v.name,
+          v.candidates,
+          v.confidence ?? "",
+          v.runtimeMs,
+          v.text
+        ]);
+      }
+    }
+    return "\uFEFF" + rows.map(r => r.map(csvEscape).join(";")).join("\r\n");
+  }
+
+  exportBtn.addEventListener("click", async () => {
+    if (!state.tests.length) return;
+    exportBtn.disabled = true;
+    exportBtn.textContent = "Testpaket wird erstellt …";
+
+    try {
+      const zip = new JSZip();
+      const photos = zip.folder("fotos");
+      const processed = zip.folder("vergleichsbilder");
+
+      for (const t of state.tests) {
+        const origBlob = dataURLToBlob(t.originalDataUrl);
+        const ext = origBlob.type.includes("png") ? "png" : "jpg";
+        photos.file(`${t.id}_original.${ext}`, origBlob);
+
+        for (const v of t.variants) {
+          processed.file(`${t.id}_${v.mode}.jpg`, dataURLToBlob(v.processedDataUrl));
+        }
+      }
+
+      zip.file("ocr_ergebnisse.csv", buildCSV());
+
+      const jsonSafe = state.tests.map(t => ({
+        id: t.id,
+        instruction: t.instruction,
+        originalName: t.originalName,
+        originalType: t.originalType,
+        timestamp: t.timestamp,
+        variants: t.variants.map(v => ({
+          name: v.name,
+          mode: v.mode,
+          text: v.text,
+          candidates: v.candidates,
+          confidence: v.confidence,
+          runtimeMs: v.runtimeMs
+        }))
+      }));
+      zip.file("ocr_ergebnisse.json", JSON.stringify({
+        prototypeVersion: "0.1",
+        exportedAt: new Date().toISOString(),
+        tests: jsonSafe
+      }, null, 2));
+
+      zip.file("README.txt",
+`OCR/MHD-Testprototyp Version 0.1
+
+Inhalt:
+- fotos/: Originalaufnahmen
+- vergleichsbilder/: OCR-Bildvarianten
+- ocr_ergebnisse.csv: kompakte Auswertung
+- ocr_ergebnisse.json: vollständige strukturierte Ergebnisse
+
+Die Test-ID (T001, T002 usw.) verbindet jedes Foto mit seinen OCR-Ergebnissen.
+`);
+
+      const blob = await zip.generateAsync({
+        type: "blob",
+        compression: "DEFLATE",
+        compressionOptions: {level: 6}
+      });
+
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      const stamp = new Date().toISOString().slice(0,10);
+      a.download = `OCR-MHD-Testpaket_${stamp}.zip`;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      setTimeout(() => URL.revokeObjectURL(url), 30000);
+    } catch (err) {
+      console.error(err);
+      alert("Export fehlgeschlagen: " + (err.message || err));
+    } finally {
+      exportBtn.disabled = false;
+      exportBtn.textContent = "Testpaket exportieren (ZIP)";
+    }
+  });
+
+  resetBtn.addEventListener("click", async () => {
+    const ok = confirm("Alle bisherigen Testergebnisse in dieser Sitzung löschen?");
+    if (!ok) return;
+
+    state.tests = [];
+    state.index = 0;
+    state.currentFile = null;
+    state.currentDataUrl = null;
+    cameraInput.value = "";
+    preview.hidden = true;
+    resultsCard.hidden = true;
+    analyzeBtn.disabled = true;
+    progress.textContent = "";
+    updateHeader();
+    updateSummary();
+  });
+
+  window.addEventListener("beforeunload", () => {
+    if (state.worker) state.worker.terminate();
+  });
+
+  updateHeader();
+  updateSummary();
+})();
+</script>
+</body>
+</html>
