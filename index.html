@@ -11,7 +11,7 @@ h1{font-size:1.55rem;margin:0 0 4px}.sub{margin-bottom:16px;color:#444}
 .card{background:#fff;border-radius:14px;padding:16px;margin:14px 0;box-shadow:0 1px 5px #0002}
 button,.file{display:block;width:100%;box-sizing:border-box;border:0;border-radius:12px;padding:15px 14px;margin:10px 0;font-size:1.05rem;font-weight:700;text-align:center}
 button,.file{background:#111;color:#fff}button.secondary{background:#ddd;color:#111}
-button:disabled{opacity:.45}input[type=file]{display:none}
+button:disabled{opacity:.45}input[type=file].iosFile{display:block;width:100%;box-sizing:border-box;margin:12px 0;padding:14px;border:2px solid #111;border-radius:12px;background:#fff;color:#111;font-size:1rem}
 .status{font-weight:650;line-height:1.4}.small{font-size:.9rem;color:#555;line-height:1.35}
 .progressOuter{height:12px;background:#ddd;border-radius:9px;overflow:hidden;margin:10px 0}
 .progressInner{height:100%;width:0;background:#333}
@@ -23,13 +23,14 @@ table{width:100%;border-collapse:collapse;font-size:.9rem}th,td{border-bottom:1p
 <body>
 <main>
 <h1>OCR/MHD PaddleOCR-Test</h1>
-<div class="sub">Version 0.3 · PP-OCRv5 · Deutsch · Referenztest T001–T013</div>
+<div class="sub">Version 0.3.1 · PP-OCRv5 · Deutsch · Referenztest T001–T013</div>
 
 <section class="card">
   <h2>1. Referenzpaket laden</h2>
-  <label class="file" for="zipInput">Testpaket aus Version 0.1 auswählen</label>
-  <input id="zipInput" type="file" accept=".zip,application/zip">
-  <div id="zipInfo" class="status">Noch kein Testpaket ausgewählt.</div>
+  <div class="small">Tippe unten direkt auf „Datei auswählen“ und wähle das Referenz-ZIP.</div>
+  <input id="zipInput" class="iosFile" type="file" accept=".zip,application/zip,application/x-zip-compressed">
+  <div id="selectedName" class="status">Ausgewählte Datei: –</div>
+  <div id="zipInfo" class="status">Noch kein Testpaket eingelesen.</div>
   <div class="small">Erwartet wird das bisherige ZIP mit dem Ordner „fotos“ und Dateien wie T001_original.jpg.</div>
 </section>
 
@@ -66,7 +67,7 @@ table{width:100%;border-collapse:collapse;font-size:.9rem}th,td{border-bottom:1p
 import { PaddleOCR } from "https://esm.sh/@paddleocr/paddleocr-js@0.4.2?bundle";
 
 const $ = id => document.getElementById(id);
-const zipInput=$("zipInput"), zipInfo=$("zipInfo"), initBtn=$("initBtn"), initInfo=$("initInfo"),
+const zipInput=$("zipInput"), zipInfo=$("zipInfo"), selectedName=$("selectedName"), initBtn=$("initBtn"), initInfo=$("initInfo"),
       runBtn=$("runBtn"), runInfo=$("runInfo"), bar=$("bar"), summary=$("summary"),
       tableWrap=$("tableWrap"), exportBtn=$("exportBtn"), lastText=$("lastText");
 
@@ -97,8 +98,13 @@ function contextLines(text){
 
 function esc(s){return String(s??"").replaceAll("&","&amp;").replaceAll("<","&lt;").replaceAll(">","&gt;")}
 
-zipInput.addEventListener("change", async()=>{
-  const file=zipInput.files?.[0]; if(!file)return;
+async function loadSelectedZip(){
+  const file=zipInput.files && zipInput.files.length ? zipInput.files[0] : null;
+  selectedName.textContent = "Ausgewählte Datei: " + (file ? file.name : "–");
+  if(!file){
+    zipInfo.textContent="iOS hat keine Datei an die Webseite übergeben.";
+    return;
+  }
   state.sourceZipName=file.name;
   state.photos=[];
   zipInfo.textContent="ZIP wird gelesen …";
@@ -118,7 +124,9 @@ zipInput.addEventListener("change", async()=>{
     zipInfo.textContent="Fehler: "+(err.message||err);
   }
   checkReady();
-});
+}
+zipInput.addEventListener("change", loadSelectedZip);
+zipInput.addEventListener("input", loadSelectedZip);
 
 initBtn.addEventListener("click", async()=>{
   initBtn.disabled=true;
@@ -219,7 +227,7 @@ exportBtn.addEventListener("click",async()=>{
     const zip=new JSZip();
     zip.file("paddleocr_ergebnisse.csv",csv());
     zip.file("paddleocr_ergebnisse.json",JSON.stringify({
-      prototypeVersion:"0.3",
+      prototypeVersion:"0.3.1",
       engine:"@paddleocr/paddleocr-js",
       packageVersion:"0.4.2",
       ocrVersion:"PP-OCRv5",
@@ -230,7 +238,7 @@ exportBtn.addEventListener("click",async()=>{
     },null,2));
     zip.file("README.txt",
 `OCR/MHD PaddleOCR Browser-Test
-Version 0.3
+Version 0.3.1
 Engine: @paddleocr/paddleocr-js 0.4.2
 Modellfamilie: PP-OCRv5
 Sprache: Deutsch (de)
@@ -246,7 +254,7 @@ Enthalten:
     const blob=await zip.generateAsync({type:"blob",compression:"DEFLATE",compressionOptions:{level:6}});
     const a=document.createElement("a");
     const url=URL.createObjectURL(blob);
-    a.href=url;a.download=`OCR-MHD-PaddleOCR_v0.3_${stamp()}.zip`;
+    a.href=url;a.download=`OCR-MHD-PaddleOCR_v0.3.1_${stamp()}.zip`;
     document.body.appendChild(a);a.click();a.remove();
     setTimeout(()=>URL.revokeObjectURL(url),30000);
   }catch(err){alert("Export fehlgeschlagen: "+(err.message||err))}
