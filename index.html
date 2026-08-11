@@ -23,11 +23,11 @@ table{width:100%;border-collapse:collapse;font-size:.9rem}th,td{border-bottom:1p
 <body>
 <main>
 <h1>OCR/MHD PaddleOCR-Test</h1>
-<div class="sub">Version 0.3.4 · PP-OCRv5 · Deutsch · Referenztest T001–T013</div>
+<div class="sub">Version 0.3.5 · PP-OCRv5 · Deutsch · Referenztest T001–T013</div>
 
 <section class="card">
   <h2>1. Referenzpaket laden</h2>
-  <div class="small">1. Tippe im Safari-Dateifeld auf „Datei auswählen“. 2. Wähle das Referenz-ZIP. 3. Tippe danach auf „ZIP jetzt einlesen“.</div>
+  <div class="small">1. Prüfe zuerst die Diagnose: „Basis-JavaScript läuft“. 2. Tippe auf „Datei auswählen“ und wähle das Referenz-ZIP. 3. Tippe auf „ZIP jetzt einlesen“. PaddleOCR wird dabei noch NICHT geladen.</div>
   <input id="zipInput" class="iosFile" type="file" accept=".zip,application/zip,application/x-zip-compressed">
   <button id="readZipBtn">ZIP jetzt einlesen</button>
   <div id="selectedName" class="status">Ausgewählte Datei: wird beim Einlesen geprüft.</div>
@@ -65,8 +65,8 @@ table{width:100%;border-collapse:collapse;font-size:.9rem}th,td{border-bottom:1p
 </main>
 
 <script src="https://cdn.jsdelivr.net/npm/jszip@3.10.1/dist/jszip.min.js"></script>
-<script type="module">
-import { PaddleOCR } from "https://esm.sh/@paddleocr/paddleocr-js@0.4.2?bundle";
+<script>
+let PaddleOCRClass = null;
 
 const $ = id => document.getElementById(id);
 const zipInput=$("zipInput"), readZipBtn=$("readZipBtn"), zipInfo=$("zipInfo"), selectedName=$("selectedName"), diag=$("diag"), initBtn=$("initBtn"), initInfo=$("initInfo"),
@@ -74,6 +74,9 @@ const zipInput=$("zipInput"), readZipBtn=$("readZipBtn"), zipInfo=$("zipInfo"), 
       tableWrap=$("tableWrap"), exportBtn=$("exportBtn"), lastText=$("lastText");
 
 const state={photos:[],ocr:null,results:[],sourceZipName:""};
+
+// Basisdiagnose: muss auch dann laufen, wenn PaddleOCR später scheitert.
+setTimeout(()=>{ if(diag) diag.textContent="Diagnose: Basis-JavaScript läuft. ZIP-Funktion ist unabhängig von PaddleOCR bereit."; },100);
 
 function checkReady(){ runBtn.disabled=!(state.photos.length && state.ocr); }
 
@@ -142,9 +145,15 @@ readZipBtn.addEventListener("click", async()=>{
 
 initBtn.addEventListener("click", async()=>{
   initBtn.disabled=true;
-  initInfo.textContent="PP-OCRv5 wird geladen und initialisiert …";
+  initInfo.textContent="Stufe A: PaddleOCR.js-Modul wird dynamisch geladen …";
   try{
-    state.ocr=await PaddleOCR.create({
+    if(!PaddleOCRClass){
+      const mod = await import("https://esm.sh/@paddleocr/paddleocr-js@0.4.2?bundle");
+      if(!mod || !mod.PaddleOCR) throw new Error("Modul geladen, aber PaddleOCR-Export fehlt.");
+      PaddleOCRClass = mod.PaddleOCR;
+    }
+    initInfo.textContent="Stufe B: PaddleOCR.js geladen. PP-OCRv5/ONNX wird initialisiert …";
+    state.ocr=await PaddleOCRClass.create({
       lang:"de",
       ocrVersion:"PP-OCRv5",
       worker:false,
@@ -155,11 +164,11 @@ initBtn.addEventListener("click", async()=>{
       }
     });
     const info=state.ocr.getInitializationSummary?.();
-    initInfo.textContent="PP-OCRv5 ist bereit."+ (info ? " Initialisierung erfolgreich." : "");
+    initInfo.textContent="Stufe C: PP-OCRv5 ist bereit."+ (info ? " Initialisierung erfolgreich." : "");
   }catch(err){
     console.error(err);
     state.ocr=null;
-    initInfo.textContent="Initialisierung fehlgeschlagen: "+(err.message||err);
+    initInfo.textContent="FEHLER beim PaddleOCR-Laden/Initialisieren: "+(err.message||err);
     initBtn.disabled=false;
   }
   checkReady();
@@ -239,7 +248,7 @@ exportBtn.addEventListener("click",async()=>{
     const zip=new JSZip();
     zip.file("paddleocr_ergebnisse.csv",csv());
     zip.file("paddleocr_ergebnisse.json",JSON.stringify({
-      prototypeVersion:"0.3.4",
+      prototypeVersion:"0.3.5",
       engine:"@paddleocr/paddleocr-js",
       packageVersion:"0.4.2",
       ocrVersion:"PP-OCRv5",
@@ -250,7 +259,7 @@ exportBtn.addEventListener("click",async()=>{
     },null,2));
     zip.file("README.txt",
 `OCR/MHD PaddleOCR Browser-Test
-Version 0.3.4
+Version 0.3.5
 Engine: @paddleocr/paddleocr-js 0.4.2
 Modellfamilie: PP-OCRv5
 Sprache: Deutsch (de)
@@ -266,7 +275,7 @@ Enthalten:
     const blob=await zip.generateAsync({type:"blob",compression:"DEFLATE",compressionOptions:{level:6}});
     const a=document.createElement("a");
     const url=URL.createObjectURL(blob);
-    a.href=url;a.download=`OCR-MHD-PaddleOCR_v0.3.4_${stamp()}.zip`;
+    a.href=url;a.download=`OCR-MHD-PaddleOCR_v0.3.5_${stamp()}.zip`;
     document.body.appendChild(a);a.click();a.remove();
     setTimeout(()=>URL.revokeObjectURL(url),30000);
   }catch(err){alert("Export fehlgeschlagen: "+(err.message||err))}
