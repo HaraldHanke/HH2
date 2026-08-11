@@ -1,708 +1,257 @@
-<!DOCTYPE html>
+<!doctype html>
 <html lang="de">
 <head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-  <title>OCR/MHD-Testprototyp v0.2</title>
-  <style>
-    :root {
-      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
-    }
-    body {
-      margin: 0;
-      background: #f5f5f5;
-      color: #111;
-    }
-    main {
-      max-width: 760px;
-      margin: 0 auto;
-      padding: 18px;
-    }
-    h1 {
-      font-size: 1.65rem;
-      margin: 0 0 6px;
-    }
-    .version {
-      font-size: 0.95rem;
-      margin-bottom: 18px;
-    }
-    .card {
-      background: white;
-      border-radius: 14px;
-      padding: 16px;
-      margin: 14px 0;
-      box-shadow: 0 1px 5px rgba(0,0,0,.12);
-    }
-    .test-id {
-      font-size: 1.5rem;
-      font-weight: 700;
-    }
-    .instruction {
-      font-size: 1.25rem;
-      line-height: 1.35;
-      margin-top: 8px;
-    }
-    button, .file-label {
-      width: 100%;
-      box-sizing: border-box;
-      display: block;
-      border: 0;
-      border-radius: 12px;
-      padding: 15px 16px;
-      font-size: 1.1rem;
-      font-weight: 650;
-      margin: 10px 0;
-      text-align: center;
-      background: #111;
-      color: white;
-      cursor: pointer;
-    }
-    button.secondary {
-      background: #ddd;
-      color: #111;
-    }
-    button:disabled {
-      opacity: .45;
-      cursor: default;
-    }
-    input[type=file] {
-      display: none;
-    }
-    img.preview {
-      width: 100%;
-      max-height: 320px;
-      object-fit: contain;
-      border-radius: 10px;
-      background: #eee;
-      margin-top: 10px;
-    }
-    .progress {
-      font-weight: 600;
-      margin: 10px 0;
-    }
-    .variant {
-      border-top: 1px solid #ddd;
-      padding-top: 12px;
-      margin-top: 12px;
-    }
-    .variant:first-child {
-      border-top: 0;
-      padding-top: 0;
-      margin-top: 0;
-    }
-    .variant h3 {
-      margin: 0 0 6px;
-    }
-    .candidate {
-      font-size: 1.15rem;
-      font-weight: 700;
-    }
-    pre {
-      white-space: pre-wrap;
-      word-break: break-word;
-      background: #f1f1f1;
-      border-radius: 8px;
-      padding: 10px;
-      font-size: .92rem;
-      max-height: 180px;
-      overflow: auto;
-    }
-    .small {
-      font-size: .9rem;
-      color: #444;
-    }
-    .status-ok {
-      font-weight: 700;
-    }
-  </style>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>OCR/MHD PaddleOCR Test v0.3</title>
+<style>
+:root{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;color:#111;background:#f5f5f5}
+body{margin:0}main{max-width:760px;margin:auto;padding:18px}
+h1{font-size:1.55rem;margin:0 0 4px}.sub{margin-bottom:16px;color:#444}
+.card{background:#fff;border-radius:14px;padding:16px;margin:14px 0;box-shadow:0 1px 5px #0002}
+button,.file{display:block;width:100%;box-sizing:border-box;border:0;border-radius:12px;padding:15px 14px;margin:10px 0;font-size:1.05rem;font-weight:700;text-align:center}
+button,.file{background:#111;color:#fff}button.secondary{background:#ddd;color:#111}
+button:disabled{opacity:.45}input[type=file]{display:none}
+.status{font-weight:650;line-height:1.4}.small{font-size:.9rem;color:#555;line-height:1.35}
+.progressOuter{height:12px;background:#ddd;border-radius:9px;overflow:hidden;margin:10px 0}
+.progressInner{height:100%;width:0;background:#333}
+pre{white-space:pre-wrap;word-break:break-word;background:#f1f1f1;padding:10px;border-radius:8px;max-height:260px;overflow:auto}
+table{width:100%;border-collapse:collapse;font-size:.9rem}th,td{border-bottom:1px solid #ddd;padding:7px;text-align:left;vertical-align:top}
+.good{font-weight:700}
+</style>
 </head>
 <body>
 <main>
-  <h1>OCR/MHD-Testprototyp</h1>
-  <div class="version">Version 0.2 · Referenztest mit gezielter MHD-Suche</div>
+<h1>OCR/MHD PaddleOCR-Test</h1>
+<div class="sub">Version 0.3 · PP-OCRv5 · Deutsch · Referenztest T001–T013</div>
 
-  <section class="card">
-    <div class="test-id" id="testId">Test T001</div>
-    <div class="instruction" id="instruction"></div>
-    <div class="small" id="counter"></div>
+<section class="card">
+  <h2>1. Referenzpaket laden</h2>
+  <label class="file" for="zipInput">Testpaket aus Version 0.1 auswählen</label>
+  <input id="zipInput" type="file" accept=".zip,application/zip">
+  <div id="zipInfo" class="status">Noch kein Testpaket ausgewählt.</div>
+  <div class="small">Erwartet wird das bisherige ZIP mit dem Ordner „fotos“ und Dateien wie T001_original.jpg.</div>
+</section>
 
-    <label class="file-label" for="zipInput">Testpaket aus Version 0.1 laden</label>
-    <input id="zipInput" type="file" accept=".zip,application/zip">
-    <button id="batchBtn" disabled>Referenztest mit allen Fotos starten</button>
-    <div class="small" id="zipInfo">Für den Vergleich bitte das ZIP-Testpaket aus Version 0.1 auswählen.</div>
+<section class="card">
+  <h2>2. PaddleOCR initialisieren</h2>
+  <button id="initBtn">PP-OCRv5 laden</button>
+  <div id="initInfo" class="status">Noch nicht geladen.</div>
+  <div class="small">Beim ersten Start werden JavaScript/WASM und OCR-Modelldaten aus dem Internet geladen. Je nach Verbindung kann das dauern.</div>
+</section>
 
-    <hr style="margin:18px 0;border:0;border-top:1px solid #ddd">
+<section class="card">
+  <h2>3. Referenztest</h2>
+  <button id="runBtn" disabled>Alle Referenzbilder testen</button>
+  <div id="runInfo" class="status">Wartet auf ZIP und OCR-Modell.</div>
+  <div class="progressOuter"><div id="bar" class="progressInner"></div></div>
+  <div id="summary"></div>
+</section>
 
-    <label class="file-label" for="cameraInput">Alternativ: einzelnes Foto aufnehmen / auswählen</label>
-    <input id="cameraInput" type="file" accept="image/*" capture="environment">
+<section class="card">
+  <h2>4. Ergebnisse</h2>
+  <div id="tableWrap">Noch keine Ergebnisse.</div>
+  <button id="exportBtn" class="secondary" disabled>Ergebnis-ZIP exportieren</button>
+  <div class="small">Dateiname enthält automatisch Version, Datum und Uhrzeit.</div>
+</section>
 
-    <img id="preview" class="preview" alt="Vorschau des Testfotos" hidden>
-    <div class="small" id="cropHint" hidden>Version 0.2 untersucht automatisch fünf Bereiche des Fotos (Gesamtbild, Mitte, oben, unten und mittleres Band) und bewertet datumsähnliche OCR-Treffer.</div>
-
-    <button id="analyzeBtn" disabled>MHD gezielt suchen</button>
-    <div id="progress" class="progress"></div>
-  </section>
-
-  <section class="card" id="resultsCard" hidden>
-    <h2>Ergebnis</h2>
-    <div id="results"></div>
-    <button id="nextBtn">Nächstes Testfoto</button>
-  </section>
-
-  <section class="card">
-    <h2>Gesamttest</h2>
-    <div id="summary">Noch keine Tests abgeschlossen.</div>
-    <button id="exportBtn" class="secondary" disabled>Testpaket exportieren (ZIP)</button>
-    <button id="resetBtn" class="secondary">Test neu beginnen</button>
-    <div class="small">
-      Das ZIP enthält die Originalfotos, die aufbereiteten Vergleichsbilder,
-      eine CSV-Auswertung und eine JSON-Datei mit allen Rohdaten.
-    </div>
-  </section>
+<section class="card">
+  <h2>Letztes OCR-Ergebnis</h2>
+  <pre id="lastText">(noch keines)</pre>
+</section>
 </main>
 
-<script src="https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/tesseract.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/jszip@3.10.1/dist/jszip.min.js"></script>
+<script type="module">
+import { PaddleOCR } from "https://esm.sh/@paddleocr/paddleocr-js@0.4.2?bundle";
 
-<script>
-(() => {
-  const instructions = [
-    "MHD möglichst normal und gut sichtbar fotografieren.",
-    "MHD bei schwachem Kontrast fotografieren.",
-    "MHD auf einer gewölbten oder unebenen Verpackung fotografieren.",
-    "MHD etwas weiter entfernt fotografieren, sodass mehr Verpackung sichtbar ist.",
-    "MHD möglichst nah fotografieren.",
-    "MHD bei weniger günstiger Beleuchtung fotografieren.",
-    "MHD leicht schräg fotografieren.",
-    "Ein schwieriges MHD wählen, z. B. geprägt, punktiert oder sehr klein.",
-    "Ein weiteres typisches MHD aus Kühlschrank oder Vorrat fotografieren.",
-    "Ein weiteres schwieriges MHD fotografieren."
+const $ = id => document.getElementById(id);
+const zipInput=$("zipInput"), zipInfo=$("zipInfo"), initBtn=$("initBtn"), initInfo=$("initInfo"),
+      runBtn=$("runBtn"), runInfo=$("runInfo"), bar=$("bar"), summary=$("summary"),
+      tableWrap=$("tableWrap"), exportBtn=$("exportBtn"), lastText=$("lastText");
+
+const state={photos:[],ocr:null,results:[],sourceZipName:""};
+
+function checkReady(){ runBtn.disabled=!(state.photos.length && state.ocr); }
+
+function dateCandidates(text){
+  const normalized = text
+    .replace(/[Oo]/g,"0")
+    .replace(/[Il|]/g,"1")
+    .replace(/[–—]/g,"-");
+  const patterns=[
+    /\b(?:0?[1-9]|[12]\d|3[01])[.\/:-](?:0?[1-9]|1[0-2])[.\/:-](?:20)?\d{2}\b/g,
+    /\b(?:0?[1-9]|1[0-2])[.\/-](?:20)?\d{2}\b/g,
+    /\b(?:20)?\d{2}[.\/-](?:0?[1-9]|1[0-2])[.\/-](?:0?[1-9]|[12]\d|3[01])\b/g
   ];
+  const out=[];
+  for(const p of patterns) out.push(...(normalized.match(p)||[]));
+  return [...new Set(out)];
+}
 
-  const state = {
-    index: 0,
-    currentFile: null,
-    currentDataUrl: null,
-    tests: [],
-    worker: null,
-    referencePhotos: []
-  };
+function contextLines(text){
+  const lines=text.split(/\n+/).map(s=>s.trim()).filter(Boolean);
+  const words=/haltbar|mhd|best before|verbrauch|verbrauchen|abgefüllt|abgefuellt|ernte/i;
+  return lines.filter(l=>words.test(l));
+}
 
-  const el = id => document.getElementById(id);
-  const testIdEl = el("testId");
-  const instructionEl = el("instruction");
-  const counterEl = el("counter");
-  const zipInput = el("zipInput");
-  const batchBtn = el("batchBtn");
-  const zipInfo = el("zipInfo");
-  const cameraInput = el("cameraInput");
-  const preview = el("preview");
-  const analyzeBtn = el("analyzeBtn");
-  const progress = el("progress");
-  const resultsCard = el("resultsCard");
-  const results = el("results");
-  const nextBtn = el("nextBtn");
-  const summary = el("summary");
-  const exportBtn = el("exportBtn");
-  const resetBtn = el("resetBtn");
+function esc(s){return String(s??"").replaceAll("&","&amp;").replaceAll("<","&lt;").replaceAll(">","&gt;")}
 
-  function currentId() {
-    return "T" + String(state.index + 1).padStart(3, "0");
-  }
-
-  function updateHeader() {
-    testIdEl.textContent = "Test " + currentId();
-    instructionEl.textContent = instructions[state.index % instructions.length];
-    counterEl.textContent = `${state.tests.length} Test(s) abgeschlossen. Ziel für den ersten Durchlauf: 8–12.`;
-  }
-
-  function fileToDataURL(file) {
-    return new Promise((resolve, reject) => {
-      const reader = new FileReader();
-      reader.onload = () => resolve(reader.result);
-      reader.onerror = reject;
-      reader.readAsDataURL(file);
-    });
-  }
-
-  function dataURLToBlob(dataUrl) {
-    const [header, data] = dataUrl.split(",");
-    const mime = header.match(/data:(.*?);base64/)[1];
-    const binary = atob(data);
-    const bytes = new Uint8Array(binary.length);
-    for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i);
-    return new Blob([bytes], {type: mime});
-  }
-
-  function loadImage(dataUrl) {
-    return new Promise((resolve, reject) => {
-      const img = new Image();
-      img.onload = () => resolve(img);
-      img.onerror = reject;
-      img.src = dataUrl;
-    });
-  }
-
-  async function preprocess(dataUrl, mode, region = "full") {
-    const img = await loadImage(dataUrl);
-    const maxSide = 1800;
-    let width = img.naturalWidth;
-    let height = img.naturalHeight;
-    const scale = Math.min(1, maxSide / Math.max(width, height));
-    width = Math.round(width * scale);
-    height = Math.round(height * scale);
-
-    const regions = {
-      full: [0, 0, 1, 1],
-      center: [0.10, 0.20, 0.80, 0.60],
-      top: [0, 0, 1, 0.45],
-      bottom: [0, 0.55, 1, 0.45],
-      band: [0, 0.25, 1, 0.50]
-    };
-    const r = regions[region] || regions.full;
-    const sx = Math.round(img.naturalWidth * r[0]);
-    const sy = Math.round(img.naturalHeight * r[1]);
-    const sw = Math.round(img.naturalWidth * r[2]);
-    const sh = Math.round(img.naturalHeight * r[3]);
-    let outW = Math.round(width * r[2]);
-    let outH = Math.round(height * r[3]);
-    const canvas = document.createElement("canvas");
-    canvas.width = outW;
-    canvas.height = outH;
-    const ctx = canvas.getContext("2d");
-    ctx.drawImage(img, sx, sy, sw, sh, 0, 0, outW, outH);
-    width = outW; height = outH;
-
-    if (mode !== "original") {
-      const imageData = ctx.getImageData(0, 0, width, height);
-      const d = imageData.data;
-
-      for (let i = 0; i < d.length; i += 4) {
-        const gray = Math.round(0.299 * d[i] + 0.587 * d[i+1] + 0.114 * d[i+2]);
-
-        if (mode === "contrast") {
-          const contrast = 1.65;
-          const v = Math.max(0, Math.min(255, (gray - 128) * contrast + 128));
-          d[i] = d[i+1] = d[i+2] = v;
-        }
-
-        if (mode === "threshold") {
-          const v = gray >= 145 ? 255 : 0;
-          d[i] = d[i+1] = d[i+2] = v;
-        }
-      }
-      ctx.putImageData(imageData, 0, 0);
+zipInput.addEventListener("change", async()=>{
+  const file=zipInput.files?.[0]; if(!file)return;
+  state.sourceZipName=file.name;
+  state.photos=[];
+  zipInfo.textContent="ZIP wird gelesen …";
+  try{
+    const zip=await JSZip.loadAsync(file);
+    const entries=Object.values(zip.files)
+      .filter(e=>!e.dir && /^fotos\/T\d+_original\.(jpg|jpeg|png|webp)$/i.test(e.name))
+      .sort((a,b)=>a.name.localeCompare(b.name,undefined,{numeric:true}));
+    for(const e of entries){
+      const blob=await e.async("blob");
+      const m=e.name.match(/(T\d+)_original/i);
+      state.photos.push({id:m?.[1].toUpperCase()||e.name,name:e.name.split("/").pop(),blob});
     }
-
-    return canvas.toDataURL("image/jpeg", 0.92);
+    if(!state.photos.length) throw new Error("Keine Referenzbilder im Ordner „fotos“ gefunden.");
+    zipInfo.textContent=`${state.photos.length} Referenzbilder geladen: ${state.photos[0].id}–${state.photos.at(-1).id}.`;
+  }catch(err){
+    zipInfo.textContent="Fehler: "+(err.message||err);
   }
+  checkReady();
+});
 
-  function normalizeDateLike(s) {
-    return s.toUpperCase()
-      .replace(/[OQ]/g, "0")
-      .replace(/[IL|]/g, "1")
-      .replace(/Z/g, "2")
-      .replace(/S/g, "5")
-      .replace(/B/g, "8")
-      .replace(/,/g, ".")
-      .replace(/\s+/g, " ");
-  }
-
-  function extractDateCandidates(text) {
-    const raw = text.replace(/\s+/g, " ");
-    const normalized = normalizeDateLike(raw);
-    const patterns = [
-      /\b(?:0?[1-9]|[12]\d|3[01])[.\-\/ ](?:0?[1-9]|1[0-2])[.\-\/ ](?:20)?\d{2}\b/g,
-      /\b(?:0?[1-9]|1[0-2])[.\-\/ ](?:20)?\d{2}\b/g,
-      /\b(?:20)?\d{2}[.\-\/ ](?:0?[1-9]|1[0-2])[.\-\/ ](?:0?[1-9]|[12]\d|3[01])\b/g
-    ];
-    const found = [];
-    for (const p of patterns) found.push(...(normalized.match(p) || []));
-    return [...new Set(found.map(v => v.trim()))];
-  }
-
-  async function ensureWorker() {
-    if (state.worker) return state.worker;
-    progress.textContent = "OCR-Modul wird geladen …";
-    state.worker = await Tesseract.createWorker("deu", 1, {
-      logger: m => {
-        if (m.status === "recognizing text") {
-          progress.textContent = `OCR läuft … ${Math.round((m.progress || 0) * 100)} %`;
-        }
+initBtn.addEventListener("click", async()=>{
+  initBtn.disabled=true;
+  initInfo.textContent="PP-OCRv5 wird geladen und initialisiert …";
+  try{
+    state.ocr=await PaddleOCR.create({
+      lang:"de",
+      ocrVersion:"PP-OCRv5",
+      worker:false,
+      ortOptions:{
+        backend:"wasm",
+        wasmPaths:"https://cdn.jsdelivr.net/npm/onnxruntime-web/dist/",
+        simd:true
       }
     });
-    return state.worker;
+    const info=state.ocr.getInitializationSummary?.();
+    initInfo.textContent="PP-OCRv5 ist bereit."+ (info ? " Initialisierung erfolgreich." : "");
+  }catch(err){
+    console.error(err);
+    state.ocr=null;
+    initInfo.textContent="Initialisierung fehlgeschlagen: "+(err.message||err);
+    initBtn.disabled=false;
   }
+  checkReady();
+});
 
-  async function runVariant(worker, name, mode, dataUrl, region = "full") {
-    progress.textContent = `${name}: Bild wird vorbereitet …`;
-    const processed = await preprocess(dataUrl, mode, region);
-
-    const start = performance.now();
-    const result = await worker.recognize(processed);
-    const ms = Math.round(performance.now() - start);
-    const text = (result.data.text || "").trim();
-    const candidates = extractDateCandidates(text);
-
-    return {
-      name,
-      mode,
-      region,
-      text,
-      candidates,
-      confidence: Number.isFinite(result.data.confidence) ? Math.round(result.data.confidence) : null,
-      runtimeMs: ms,
-      processedDataUrl: processed
-    };
-  }
-
-  function escapeHtml(s) {
-    return String(s)
-      .replaceAll("&", "&amp;")
-      .replaceAll("<", "&lt;")
-      .replaceAll(">", "&gt;")
-      .replaceAll('"', "&quot;");
-  }
-
-  function renderResult(test) {
-    results.innerHTML = test.variants.map(v => `
-      <div class="variant">
-        <h3>${escapeHtml(v.name)}</h3>
-        <div class="candidate">Datums-Kandidaten: ${v.candidates.length ? escapeHtml(v.candidates.join(", ")) : "keine"}</div>
-        <div class="small">OCR-Konfidenz: ${v.confidence ?? "–"} % · Laufzeit: ${(v.runtimeMs / 1000).toFixed(1)} s</div>
-        <pre>${escapeHtml(v.text || "(kein Text erkannt)")}</pre>
-      </div>
-    `).join("");
-    resultsCard.hidden = false;
-  }
-
-  function updateSummary() {
-    if (!state.tests.length) {
-      summary.textContent = "Noch keine Tests abgeschlossen.";
-      exportBtn.disabled = true;
-      return;
-    }
-
-    let candidateHits = 0;
-    let variantsTotal = 0;
-    for (const t of state.tests) {
-      for (const v of t.variants) {
-        variantsTotal++;
-        if (v.candidates.length) candidateHits++;
-      }
-    }
-
-    summary.innerHTML = `<span class="status-ok">${state.tests.length} Testfoto(s) abgeschlossen.</span>
-      In ${candidateHits} von ${variantsTotal} OCR-Durchläufen wurde mindestens ein Datums-Kandidat gefunden.`;
-    exportBtn.disabled = false;
-    counterEl.textContent = `${state.tests.length} Test(s) abgeschlossen. Ziel für den ersten Durchlauf: 8–12.`;
-  }
-
-
-  zipInput.addEventListener("change", async () => {
-    const file = zipInput.files && zipInput.files[0];
-    if (!file) return;
-    batchBtn.disabled = true;
-    zipInfo.textContent = "Testpaket wird gelesen …";
-    try {
-      const zip = await JSZip.loadAsync(file);
-      const entries = Object.values(zip.files)
-        .filter(e => !e.dir && /^fotos\/T\d+_original\.(jpg|jpeg|png)$/i.test(e.name))
-        .sort((a,b) => a.name.localeCompare(b.name, undefined, {numeric:true}));
-
-      if (!entries.length) throw new Error("Im ZIP wurden keine Referenzfotos im Ordner „fotos“ gefunden.");
-
-      state.referencePhotos = [];
-      for (const entry of entries) {
-        const blob = await entry.async("blob");
-        const dataUrl = await new Promise((resolve, reject) => {
-          const r = new FileReader();
-          r.onload = () => resolve(r.result);
-          r.onerror = reject;
-          r.readAsDataURL(blob);
-        });
-        const m = entry.name.match(/(T\d+)_original/i);
-        state.referencePhotos.push({
-          id: m ? m[1].toUpperCase() : "T" + String(state.referencePhotos.length + 1).padStart(3,"0"),
-          name: entry.name.split("/").pop(),
-          type: blob.type || "image/jpeg",
-          dataUrl
-        });
-      }
-      zipInfo.textContent = `${state.referencePhotos.length} Referenzfotos gefunden.`;
-      batchBtn.disabled = false;
-    } catch (err) {
-      console.error(err);
-      zipInfo.textContent = "ZIP konnte nicht gelesen werden: " + (err.message || err);
-    }
-  });
-
-  batchBtn.addEventListener("click", async () => {
-    if (!state.referencePhotos.length) return;
-    batchBtn.disabled = true;
-    zipInput.disabled = true;
-    cameraInput.disabled = true;
-    analyzeBtn.disabled = true;
-    state.tests = [];
-    state.index = 0;
-    resultsCard.hidden = true;
-
-    try {
-      const worker = await ensureWorker();
-      const searches = [
-        ["Gesamtbild – Kontrast", "contrast", "full"],
-        ["Mitte – Kontrast", "contrast", "center"],
-        ["Oberer Bereich – Kontrast", "contrast", "top"],
-        ["Unterer Bereich – Kontrast", "contrast", "bottom"],
-        ["Mittleres Band – Kontrast", "contrast", "band"],
-        ["Mitte – Schwarz-Weiß", "threshold", "center"]
-      ];
-
-      for (let i = 0; i < state.referencePhotos.length; i++) {
-        const photo = state.referencePhotos[i];
-        progress.textContent = `${photo.id}: Foto ${i+1} von ${state.referencePhotos.length} …`;
-        const variants = [];
-        for (const [name, mode, region] of searches) {
-          progress.textContent = `${photo.id} · ${name} · Foto ${i+1}/${state.referencePhotos.length}`;
-          variants.push(await runVariant(worker, name, mode, photo.dataUrl, region));
-        }
-        state.tests.push({
-          id: photo.id,
-          instruction: "Referenzfoto aus Testlauf 0.1",
-          originalName: photo.name,
-          originalType: photo.type,
-          timestamp: new Date().toISOString(),
-          originalDataUrl: photo.dataUrl,
-          variants
-        });
-        updateSummary();
-      }
-
-      renderResult(state.tests[state.tests.length - 1]);
-      progress.textContent = `Referenztest abgeschlossen: ${state.tests.length} Fotos ausgewertet. Jetzt Testpaket exportieren.`;
-      window.scrollTo({top: document.body.scrollHeight, behavior:"smooth"});
-    } catch (err) {
-      console.error(err);
-      progress.textContent = "Fehler beim Referenztest: " + (err.message || err);
-    } finally {
-      batchBtn.disabled = false;
-      zipInput.disabled = false;
-      cameraInput.disabled = false;
-    }
-  });
-
-  cameraInput.addEventListener("change", async () => {
-    const file = cameraInput.files && cameraInput.files[0];
-    if (!file) return;
-    state.currentFile = file;
-    state.currentDataUrl = await fileToDataURL(file);
-    preview.src = state.currentDataUrl;
-    preview.hidden = false;
-    document.getElementById("cropHint").hidden = false;
-    analyzeBtn.disabled = false;
-    resultsCard.hidden = true;
-    progress.textContent = "Foto bereit.";
-  });
-
-  analyzeBtn.addEventListener("click", async () => {
-    if (!state.currentDataUrl) return;
-    analyzeBtn.disabled = true;
-    cameraInput.disabled = true;
-
-    try {
-      const id = currentId();
-      const worker = await ensureWorker();
-
-      const variants = [];
-      const searches = [
-        ["Gesamtbild – Kontrast", "contrast", "full"],
-        ["Mitte – Kontrast", "contrast", "center"],
-        ["Oberer Bereich – Kontrast", "contrast", "top"],
-        ["Unterer Bereich – Kontrast", "contrast", "bottom"],
-        ["Mittleres Band – Kontrast", "contrast", "band"],
-        ["Mitte – Schwarz-Weiß", "threshold", "center"]
-      ];
-      for (const [name, mode, region] of searches) {
-        variants.push(await runVariant(worker, name, mode, state.currentDataUrl, region));
-      }
-
-      const test = {
-        id,
-        instruction: instructions[state.index % instructions.length],
-        originalName: state.currentFile ? state.currentFile.name : "",
-        originalType: state.currentFile ? state.currentFile.type : "image/jpeg",
-        timestamp: new Date().toISOString(),
-        originalDataUrl: state.currentDataUrl,
-        variants
-      };
-
-      state.tests.push(test);
-      renderResult(test);
-      updateSummary();
-      progress.textContent = "Auswertung abgeschlossen.";
-    } catch (err) {
-      console.error(err);
-      progress.textContent = "Fehler bei der OCR: " + (err.message || err);
-      analyzeBtn.disabled = false;
-    } finally {
-      cameraInput.disabled = false;
-    }
-  });
-
-  nextBtn.addEventListener("click", () => {
-    state.index++;
-    state.currentFile = null;
-    state.currentDataUrl = null;
-    cameraInput.value = "";
-    preview.src = "";
-    preview.hidden = true;
-    analyzeBtn.disabled = true;
-    resultsCard.hidden = true;
-    progress.textContent = "";
-    updateHeader();
-    window.scrollTo({top: 0, behavior: "smooth"});
-  });
-
-  function csvEscape(value) {
-    const s = Array.isArray(value) ? value.join(" | ") : String(value ?? "");
-    return '"' + s.replaceAll('"', '""') + '"';
-  }
-
-  function buildCSV() {
-    const rows = [[
-      "Test-ID",
-      "Fotoanweisung",
-      "Originaldatei",
-      "Zeitpunkt",
-      "Variante",
-      "Datums-Kandidaten",
-      "OCR-Konfidenz",
-      "Laufzeit_ms",
-      "OCR-Gesamttext"
-    ]];
-
-    for (const t of state.tests) {
-      for (const v of t.variants) {
-        rows.push([
-          t.id,
-          t.instruction,
-          t.originalName,
-          t.timestamp,
-          v.name,
-          v.candidates,
-          v.confidence ?? "",
-          v.runtimeMs,
-          v.text
-        ]);
-      }
-    }
-    return "\uFEFF" + rows.map(r => r.map(csvEscape).join(";")).join("\r\n");
-  }
-
-  exportBtn.addEventListener("click", async () => {
-    if (!state.tests.length) return;
-    exportBtn.disabled = true;
-    exportBtn.textContent = "Testpaket wird erstellt …";
-
-    try {
-      const zip = new JSZip();
-      const photos = zip.folder("fotos");
-      const processed = zip.folder("vergleichsbilder");
-
-      for (const t of state.tests) {
-        const origBlob = dataURLToBlob(t.originalDataUrl);
-        const ext = origBlob.type.includes("png") ? "png" : "jpg";
-        photos.file(`${t.id}_original.${ext}`, origBlob);
-
-        for (const v of t.variants) {
-          processed.file(`${t.id}_${v.region || "full"}_${v.mode}.jpg`, dataURLToBlob(v.processedDataUrl));
-        }
-      }
-
-      zip.file("ocr_ergebnisse.csv", buildCSV());
-
-      const jsonSafe = state.tests.map(t => ({
-        id: t.id,
-        instruction: t.instruction,
-        originalName: t.originalName,
-        originalType: t.originalType,
-        timestamp: t.timestamp,
-        variants: t.variants.map(v => ({
-          name: v.name,
-          mode: v.mode,
-          region: v.region || "full",
-          text: v.text,
-          candidates: v.candidates,
-          confidence: v.confidence,
-          runtimeMs: v.runtimeMs
-        }))
-      }));
-      zip.file("ocr_ergebnisse.json", JSON.stringify({
-        prototypeVersion: "0.2",
-        exportedAt: new Date().toISOString(),
-        tests: jsonSafe
-      }, null, 2));
-
-      zip.file("README.txt",
-`OCR/MHD-Testprototyp Version 0.2
-
-Inhalt:
-- fotos/: Originalaufnahmen
-- vergleichsbilder/: automatisch untersuchte Bildbereiche und OCR-Varianten
-- ocr_ergebnisse.csv: kompakte Auswertung
-- ocr_ergebnisse.json: vollständige strukturierte Ergebnisse
-
-Die Test-ID (T001, T002 usw.) verbindet jedes Foto mit seinen OCR-Ergebnissen.
-`);
-
-      const blob = await zip.generateAsync({
-        type: "blob",
-        compression: "DEFLATE",
-        compressionOptions: {level: 6}
+runBtn.addEventListener("click", async()=>{
+  if(!state.ocr||!state.photos.length)return;
+  runBtn.disabled=true; exportBtn.disabled=true; state.results=[]; tableWrap.textContent="Test läuft …";
+  let withDates=0,totalMs=0;
+  try{
+    for(let i=0;i<state.photos.length;i++){
+      const p=state.photos[i];
+      bar.style.width=((i/state.photos.length)*100).toFixed(1)+"%";
+      runInfo.textContent=`${p.id}: Bild ${i+1} von ${state.photos.length} wird erkannt …`;
+      const wallStart=performance.now();
+      const arr=await state.ocr.predict(p.blob);
+      const wallMs=Math.round(performance.now()-wallStart);
+      const r=arr[0];
+      const items=(r?.items||[]).map(x=>({text:x.text||"",score:Number(x.score),poly:x.poly||null}));
+      const text=items.map(x=>x.text).join("\n");
+      const dates=dateCandidates(text);
+      const contexts=contextLines(text);
+      if(dates.length)withDates++;
+      totalMs+=wallMs;
+      const avgScore=items.length?items.reduce((a,x)=>a+(Number.isFinite(x.score)?x.score:0),0)/items.length:null;
+      state.results.push({
+        id:p.id,originalName:p.name,text,dates,contexts,
+        averageScore:avgScore,
+        metrics:r?.metrics||{},
+        runtime:r?.runtime||{},
+        wallMs,items
       });
-
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement("a");
-      a.href = url;
-      const stamp = new Date().toISOString().slice(0,10);
-      a.download = `OCR-MHD-Testpaket_${stamp}.zip`;
-      document.body.appendChild(a);
-      a.click();
-      a.remove();
-      setTimeout(() => URL.revokeObjectURL(url), 30000);
-    } catch (err) {
-      console.error(err);
-      alert("Export fehlgeschlagen: " + (err.message || err));
-    } finally {
-      exportBtn.disabled = false;
-      exportBtn.textContent = "Testpaket exportieren (ZIP)";
+      lastText.textContent=`${p.id}\n\n${text || "(kein Text erkannt)"}`;
     }
-  });
+    bar.style.width="100%";
+    runInfo.textContent=`Test abgeschlossen: ${state.results.length} Bilder verarbeitet.`;
+    summary.innerHTML=`<p class="good">${withDates} von ${state.results.length} Bildern enthalten mindestens einen automatisch gefundenen Datums-Kandidaten.</p>
+      <p>Gesamte gemessene Browserzeit: ${(totalMs/1000).toFixed(1)} s.</p>`;
+    renderTable();
+    exportBtn.disabled=false;
+  }catch(err){
+    console.error(err);
+    runInfo.textContent="Test abgebrochen: "+(err.message||err);
+  }finally{
+    checkReady();
+  }
+});
 
-  resetBtn.addEventListener("click", async () => {
-    const ok = confirm("Alle bisherigen Testergebnisse in dieser Sitzung löschen?");
-    if (!ok) return;
+function renderTable(){
+  const rows=state.results.map(r=>`<tr>
+    <td>${esc(r.id)}</td>
+    <td>${esc(r.dates.join(", ")||"–")}</td>
+    <td>${r.averageScore==null?"–":r.averageScore.toFixed(3)}</td>
+    <td>${Math.round(r.metrics?.totalMs ?? r.wallMs)} ms</td>
+    <td>${esc(r.contexts.join(" | ")||"–")}</td>
+  </tr>`).join("");
+  tableWrap.innerHTML=`<table><thead><tr><th>ID</th><th>Datumskandidaten</th><th>Ø Score</th><th>Zeit</th><th>MHD-Kontext</th></tr></thead><tbody>${rows}</tbody></table>`;
+}
 
-    state.tests = [];
-    state.index = 0;
-    state.currentFile = null;
-    state.currentDataUrl = null;
-    cameraInput.value = "";
-    preview.hidden = true;
-    resultsCard.hidden = true;
-    analyzeBtn.disabled = true;
-    progress.textContent = "";
-    updateHeader();
-    updateSummary();
-  });
+function csvCell(v){return '"'+String(v??"").replaceAll('"','""')+'"'}
+function csv(){
+  const rows=[["Test-ID","Datei","Datumskandidaten","Kontextzeilen","AverageScore","detMs","recMs","totalMs","BrowserWallMs","OCR-Gesamttext"]];
+  for(const r of state.results)rows.push([
+    r.id,r.originalName,r.dates.join(" | "),r.contexts.join(" | "),
+    r.averageScore??"",r.metrics?.detMs??"",r.metrics?.recMs??"",r.metrics?.totalMs??"",r.wallMs,r.text
+  ]);
+  return "\uFEFF"+rows.map(row=>row.map(csvCell).join(";")).join("\r\n");
+}
+function stamp(){
+  const d=new Date(), pad=n=>String(n).padStart(2,"0");
+  return `${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())}_${pad(d.getHours())}${pad(d.getMinutes())}`;
+}
+exportBtn.addEventListener("click",async()=>{
+  if(!state.results.length)return;
+  exportBtn.disabled=true; exportBtn.textContent="ZIP wird erstellt …";
+  try{
+    const zip=new JSZip();
+    zip.file("paddleocr_ergebnisse.csv",csv());
+    zip.file("paddleocr_ergebnisse.json",JSON.stringify({
+      prototypeVersion:"0.3",
+      engine:"@paddleocr/paddleocr-js",
+      packageVersion:"0.4.2",
+      ocrVersion:"PP-OCRv5",
+      language:"de",
+      sourceZip:state.sourceZipName,
+      exportedAt:new Date().toISOString(),
+      results:state.results
+    },null,2));
+    zip.file("README.txt",
+`OCR/MHD PaddleOCR Browser-Test
+Version 0.3
+Engine: @paddleocr/paddleocr-js 0.4.2
+Modellfamilie: PP-OCRv5
+Sprache: Deutsch (de)
 
-  window.addEventListener("beforeunload", () => {
-    if (state.worker) state.worker.terminate();
-  });
+Dieser Test dient dem Vergleich der Erkennungsqualität im Browser.
+JavaScript/WASM und Modelldaten werden für diesen Prototypen online geladen.
+Die OCR-Inferenz läuft clientseitig im Browser.
 
-  updateHeader();
-  updateSummary();
-})();
+Enthalten:
+- paddleocr_ergebnisse.csv
+- paddleocr_ergebnisse.json
+`);
+    const blob=await zip.generateAsync({type:"blob",compression:"DEFLATE",compressionOptions:{level:6}});
+    const a=document.createElement("a");
+    const url=URL.createObjectURL(blob);
+    a.href=url;a.download=`OCR-MHD-PaddleOCR_v0.3_${stamp()}.zip`;
+    document.body.appendChild(a);a.click();a.remove();
+    setTimeout(()=>URL.revokeObjectURL(url),30000);
+  }catch(err){alert("Export fehlgeschlagen: "+(err.message||err))}
+  finally{exportBtn.disabled=false;exportBtn.textContent="Ergebnis-ZIP exportieren"}
+});
 </script>
 </body>
 </html>
