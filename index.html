@@ -23,12 +23,13 @@ table{width:100%;border-collapse:collapse;font-size:.9rem}th,td{border-bottom:1p
 <body>
 <main>
 <h1>OCR/MHD PaddleOCR-Test</h1>
-<div class="sub">Version 0.3.1 · PP-OCRv5 · Deutsch · Referenztest T001–T013</div>
+<div class="sub">Version 0.3.2 · PP-OCRv5 · Deutsch · Referenztest T001–T013</div>
 
 <section class="card">
   <h2>1. Referenzpaket laden</h2>
   <div class="small">Tippe unten direkt auf „Datei auswählen“ und wähle das Referenz-ZIP.</div>
   <input id="zipInput" class="iosFile" type="file" accept=".zip,application/zip,application/x-zip-compressed">
+  <button id="readZipBtn" class="secondary">Ausgewählte Datei einlesen</button>
   <div id="selectedName" class="status">Ausgewählte Datei: –</div>
   <div id="zipInfo" class="status">Noch kein Testpaket eingelesen.</div>
   <div class="small">Erwartet wird das bisherige ZIP mit dem Ordner „fotos“ und Dateien wie T001_original.jpg.</div>
@@ -67,7 +68,7 @@ table{width:100%;border-collapse:collapse;font-size:.9rem}th,td{border-bottom:1p
 import { PaddleOCR } from "https://esm.sh/@paddleocr/paddleocr-js@0.4.2?bundle";
 
 const $ = id => document.getElementById(id);
-const zipInput=$("zipInput"), zipInfo=$("zipInfo"), selectedName=$("selectedName"), initBtn=$("initBtn"), initInfo=$("initInfo"),
+const zipInput=$("zipInput"), readZipBtn=$("readZipBtn"), zipInfo=$("zipInfo"), selectedName=$("selectedName"), initBtn=$("initBtn"), initInfo=$("initInfo"),
       runBtn=$("runBtn"), runInfo=$("runInfo"), bar=$("bar"), summary=$("summary"),
       tableWrap=$("tableWrap"), exportBtn=$("exportBtn"), lastText=$("lastText");
 
@@ -125,8 +126,12 @@ async function loadSelectedZip(){
   }
   checkReady();
 }
-zipInput.addEventListener("change", loadSelectedZip);
-zipInput.addEventListener("input", loadSelectedZip);
+zipInput.addEventListener("change", ()=>{
+  const file=zipInput.files && zipInput.files.length ? zipInput.files[0] : null;
+  selectedName.textContent = "Ausgewählte Datei: " + (file ? file.name : "–");
+  zipInfo.textContent = file ? "Datei ausgewählt. Jetzt auf „Ausgewählte Datei einlesen“ tippen." : "Noch kein Testpaket eingelesen.";
+});
+readZipBtn.addEventListener("click", loadSelectedZip);
 
 initBtn.addEventListener("click", async()=>{
   initBtn.disabled=true;
@@ -227,7 +232,7 @@ exportBtn.addEventListener("click",async()=>{
     const zip=new JSZip();
     zip.file("paddleocr_ergebnisse.csv",csv());
     zip.file("paddleocr_ergebnisse.json",JSON.stringify({
-      prototypeVersion:"0.3.1",
+      prototypeVersion:"0.3.2",
       engine:"@paddleocr/paddleocr-js",
       packageVersion:"0.4.2",
       ocrVersion:"PP-OCRv5",
@@ -238,7 +243,7 @@ exportBtn.addEventListener("click",async()=>{
     },null,2));
     zip.file("README.txt",
 `OCR/MHD PaddleOCR Browser-Test
-Version 0.3.1
+Version 0.3.2
 Engine: @paddleocr/paddleocr-js 0.4.2
 Modellfamilie: PP-OCRv5
 Sprache: Deutsch (de)
@@ -254,7 +259,7 @@ Enthalten:
     const blob=await zip.generateAsync({type:"blob",compression:"DEFLATE",compressionOptions:{level:6}});
     const a=document.createElement("a");
     const url=URL.createObjectURL(blob);
-    a.href=url;a.download=`OCR-MHD-PaddleOCR_v0.3.1_${stamp()}.zip`;
+    a.href=url;a.download=`OCR-MHD-PaddleOCR_v0.3.2_${stamp()}.zip`;
     document.body.appendChild(a);a.click();a.remove();
     setTimeout(()=>URL.revokeObjectURL(url),30000);
   }catch(err){alert("Export fehlgeschlagen: "+(err.message||err))}
